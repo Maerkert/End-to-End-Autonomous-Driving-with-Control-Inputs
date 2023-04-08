@@ -111,3 +111,5 @@ class CarlaEnv:
             array = np.reshape(array, (WINDOW_SIZE_Y, WINDOW_SIZE_X, 4))
             array = array[:, :, :3]
             return array
+
+
