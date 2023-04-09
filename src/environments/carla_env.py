@@ -1,18 +1,26 @@
 import json
+import logging
+import time
 from copy import deepcopy
-from typing import Dict
+from typing import Dict, Tuple
 
 import carla
+import cv2
 import numpy as np
 import random
 
 from src.environments import carla_server
+from src.environments.carla_server import CarlaServer
+from src.environments.sensors import sensors
 
 MIN_STEPS = 100
 MAX_STEPS = 1000
 
-WINDOW_SIZE_X = 800
-WINDOW_SIZE_Y = 600
+SENSOR_CONFIG = json.load(open("./res/configs/sensor_setups/tesla_model_3_monocular.json", "r"))
+
+SENSOR_DATA_QUEUE = {}
+
+logging.basicConfig(level=logging.DEBUG)
 
 
 class CarlaEnv:
@@ -29,39 +37,9 @@ class CarlaEnv:
         self.sensors = []
 
         self.steps = 0
-        self.sensor_data_queue = {}
         self.current_observation = None
 
         self.reset()
-
-    def _spawn_hero(self):
-        hero_bp = self.blueprint_library.filter('vehicle.tesla.model3')[0]
-        self.hero = self.world.spawn_actor(hero_bp, random.choice(self.spawn_points))
-        self.actors.append(self.hero)
-
-        sensor_config = json.load(open("", "r"))
-
-        for sensor in sensor_config["sensors"]:
-            sensor_bp = self.blueprint_library.find(sensor["type"])
-            sensor_bp.set_attribute("role_name", sensor["name"])
-            for attribute, value in sensor["attributes"].items():
-                sensor_bp.set_attribute(attribute, value)
-            sensor_transform = carla.Transform(carla.Location(x=sensor["x"],
-                                                              y=sensor["y"],
-                                                              z=sensor["z"]),
-                                               carla.Rotation(pitch=sensor["pitch"],
-                                                              yaw=sensor["yaw"],
-                                                              roll=sensor["roll"]))
-            sensor = self.world.spawn_actor(sensor_bp, sensor_transform, attach_to=self.hero)
-            if sensor.type_id.startswith("sensor.camera"):
-                sensor.listen(lambda data: CarlaEnv._process_data(data, sensor))
-            self.sensors.append(sensor)
-
-    def _destroy_actors(self):
-        for actor in self.actors:
-            for sensor in actor.get_children():
-                sensor.destroy()
-            actor.destroy()
 
     def reset(self):
         self.world = self.client.get_world()
@@ -69,20 +47,20 @@ class CarlaEnv:
         self.spawn_points = self.map.get_spawn_points()
         self.blueprint_library = self.world.get_blueprint_library()
 
-        self._destroy_actors()
-
         self._spawn_hero()
+        self.step((0, 0))
 
         self.steps = 0
         self.current_observation = self._get_observation()
 
         return self.current_observation
 
-    def step(self, action):
+    def step(self, action: Tuple[float, float]):
         control = carla.VehicleControl()
         control.steer = action[0]
         control.throttle = action[1]
         self.hero.apply_control(control)
+        self.world.tick() # ToDo: Move to server and allow for multi clients
         self.steps += 1
 
         self.current_observation = self._get_observation()
@@ -92,7 +70,10 @@ class CarlaEnv:
         return self.current_observation, reward, done, info
 
     def _get_observation(self) -> Dict[str, np.ndarray]:
-        return deepcopy(self.sensor_data_queue)
+        data = {}
+        for sensor in self.sensors:
+            data[sensor.name] = sensor.get_data()
+        return data
 
     def _compute_reward(self) -> float:
         return 0
@@ -103,13 +84,50 @@ class CarlaEnv:
     def close(self):
         self._destroy_actors()
 
-    @staticmethod
-    def _process_data(data, sensor):
-        if sensor.type_id.startswith("sensor.camera"):
-            data.convert(carla.ColorConverter.Raw)
-            array = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
-            array = np.reshape(array, (WINDOW_SIZE_Y, WINDOW_SIZE_X, 4))
-            array = array[:, :, :3]
-            return array
+    def _spawn_hero(self):
+        hero_bp = self.blueprint_library.filter(SENSOR_CONFIG["blueprint"])[0]
+        self.hero = self.world.spawn_actor(hero_bp, random.choice(self.spawn_points))
+        self.actors.append(self.hero)
+        for sensor_name in SENSOR_CONFIG["sensors"].keys():
+            logging.debug("Spawning sensor: {}".format(sensor_name))
+            sensor_config = SENSOR_CONFIG["sensors"][sensor_name]
+            sensor = sensors.get_sensor(sensor_config["type"], sensor_name,
+                                        sensor_config, self.hero)
+            self.sensors.append(sensor)
+            logging.debug("Spawned sensor: {}".format(sensor_name))
+        self.world.tick()
 
+    def _destroy_actors(self):
+        for sensor in self.sensors:
+            sensor.stop()
+            sensor.destroy()
+        for actor in self.actors:
+            actor.destroy()
+
+
+if __name__ == "__main__":
+    server: CarlaServer = None
+    try:
+        server = CarlaServer()
+        time.sleep(20)
+        print("Getting client")
+        client = server.connect_client()
+        print("Connected to client")
+
+        print("Creating environment")
+        env = CarlaEnv(client)
+        print("Created environment")
+
+        for i in range(1000):
+            obs, reward, done, info = env.step((0.5, 0.0))
+
+            cv2.imshow("Image", obs["front_camera"])
+            cv2.waitKey(1)
+            time.sleep(0.1)
+
+        print("Observation: ", obs)
+
+    finally:
+        if server is not None:
+            server.destroy()
 

@@ -1,0 +1,40 @@
+{
+  "blueprint": "vehicle.tesla.model3",
+  "sensors": {
+    "front_camera": {
+      "type": "sensor.camera.rgb",
+      "attributes": {
+        "image_size_x": 480,
+        "image_size_y": 240,
+        "fov": 90
+      },
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0,
+      "width": 1920,
+      "height": 1080,
+      "fov": 90
+    },
+    "imu": {
+      "type": "sensor.other.imu",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 1.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    "gnss": {
+      "type": "sensor.other.gnss",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 1.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    }
+  }
+}
