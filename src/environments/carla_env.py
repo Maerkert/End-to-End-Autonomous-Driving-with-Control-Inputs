@@ -1,15 +1,12 @@
 import json
 import logging
 import time
-from copy import deepcopy
 from typing import Dict, Tuple
-
 import carla
 import cv2
 import numpy as np
 import random
 
-from src.environments import carla_server
 from src.environments.carla_server import CarlaServer
 from src.environments.sensors import sensors
 
@@ -17,8 +14,6 @@ MIN_STEPS = 100
 MAX_STEPS = 1000
 
 SENSOR_CONFIG = json.load(open("./res/configs/sensor_setups/tesla_model_3_monocular.json", "r"))
-
-SENSOR_DATA_QUEUE = {}
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -28,10 +23,11 @@ class CarlaEnv:
     def __init__(self, client: carla.Client):
         self.client = client
 
-        self.world = None
-        self.map = None
-        self.spawn_points = None
-        self.blueprint_library = None
+        self.world = self.client.get_world()
+        self.map = self.world.get_map()
+        self.spawn_points = self.map.get_spawn_points()
+        self.blueprint_library = self.world.get_blueprint_library()
+
         self.actors = []
 
         self.sensors = []
@@ -42,12 +38,9 @@ class CarlaEnv:
         self.reset()
 
     def reset(self):
-        self.world = self.client.get_world()
-        self.map = self.world.get_map()
-        self.spawn_points = self.map.get_spawn_points()
-        self.blueprint_library = self.world.get_blueprint_library()
-
+        self._destroy_actors()
         self._spawn_hero()
+
         self.step((0, 0))
 
         self.steps = 0
@@ -121,7 +114,10 @@ if __name__ == "__main__":
         for i in range(1000):
             obs, reward, done, info = env.step((0.5, 0.0))
 
+            front_camera = obs["front_camera"]
+
             cv2.imshow("Image", obs["front_camera"])
+            cv2.imshow("Segmentation", obs["front_segmentation"])
             cv2.waitKey(1)
             time.sleep(0.1)
 
