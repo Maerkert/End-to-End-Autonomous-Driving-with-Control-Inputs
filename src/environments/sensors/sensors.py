@@ -26,6 +26,10 @@ def get_sensor(sensor_type: str, name: str, attributes: dict, parent_actor: carl
 		return SegmentationCamera(name, attributes, parent_actor)
 	elif sensor_type == "sensor.camera.depth":
 		return DepthCamera(name, attributes, parent_actor)
+	elif sensor_type == "sensor.other.collision":
+		return CollisionSensor(name, attributes, parent_actor)
+	elif sensor_type == "sensor.other.lane_invasion":
+		return LaneInvasionSensor(name, attributes, parent_actor)
 	else:
 		raise ValueError("Invalid sensor type: {}".format(sensor_type))
 
@@ -180,3 +184,24 @@ class GNSS(Sensor):
 							  self.data_buffer.altitude])
 			return array
 		return None
+
+
+class CollisionSensor(Sensor):
+
+	def __init__(self, name: str, attributes: dict, parent_actor: carla.Actor):
+		super().__init__(name, attributes, parent_actor)
+
+	def get_data(self):
+		# To be implemented
+		return False
+
+
+class LaneInvasionSensor(Sensor):
+
+	def __init__(self, name: str, attributes: dict, parent_actor: carla.Actor):
+		super().__init__(name, attributes, parent_actor)
+
+	def get_data(self):
+		# To be implemented
+		return False
+

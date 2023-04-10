@@ -32,5 +32,57 @@
         "width": 480,
         "height": 240
         }
-    }
+    },
+    "depth_cam": {
+      "type": "sensor.camera.depth",
+      "attributes": {
+        "sensor_tick": 0.1,
+        "image_size_x": 480,
+        "image_size_y": 240
+      },
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0,
+      "width": 480,
+      "height": 240
+    },
+    "imu": {
+      "type": "sensor.other.imu",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    "gnss": {
+      "type": "sensor.other.gnss",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    "collision": {
+      "type": "sensor.other.collision",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
+    "line_invasion": {
+      "type": "sensor.other.lane_invasion",
+      "x": 0.2,
+      "y": 0.0,
+      "z": 3.3,
+      "roll": 0.0,
+      "pitch": 0.0,
+      "yaw": 0.0
+    },
 }
