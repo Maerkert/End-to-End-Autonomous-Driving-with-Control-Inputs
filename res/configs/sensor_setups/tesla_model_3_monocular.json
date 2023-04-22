@@ -4,85 +4,93 @@
     "front_camera": {
       "type": "sensor.camera.rgb",
       "attributes": {
-        "sensor_tick": 0.1,
-        "image_size_x": 480,
-        "image_size_y": 240
+        "image_size_x": 1280,
+        "image_size_y": 480,
+        "fov": 120
       },
-      "x": 0.2,
+      "x": 0.5,
       "y": 0.0,
-      "z": 3.3,
+      "z": 1.5,
       "roll": 0.0,
       "pitch": 0.0,
-      "yaw": 0.0,
-      "width": 480,
-      "height": 240
+      "yaw": 0.0
     },
     "front_segmentation": {
         "type": "sensor.camera.semantic_segmentation",
         "attributes": {
-            "image_size_x": 480,
-            "image_size_y": 240
+            "image_size_x": 1280,
+            "image_size_y": 480,
+            "fov": 120
         },
-        "x": 0.2,
+        "x": 0.5,
         "y": 0.0,
-        "z": 3.3,
+        "z": 1.5,
         "roll": 0.0,
         "pitch": 0.0,
-        "yaw": 0.0,
-        "width": 480,
-        "height": 240
-        }
-    },
-    "depth_cam": {
-      "type": "sensor.camera.depth",
-      "attributes": {
-        "sensor_tick": 0.1,
-        "image_size_x": 480,
-        "image_size_y": 240
+        "yaw": 0.0
       },
-      "x": 0.2,
-      "y": 0.0,
-      "z": 3.3,
-      "roll": 0.0,
-      "pitch": 0.0,
-      "yaw": 0.0,
-      "width": 480,
-      "height": 240
-    },
-    "imu": {
-      "type": "sensor.other.imu",
-      "x": 0.2,
-      "y": 0.0,
-      "z": 3.3,
-      "roll": 0.0,
-      "pitch": 0.0,
-      "yaw": 0.0
-    },
-    "gnss": {
-      "type": "sensor.other.gnss",
-      "x": 0.2,
-      "y": 0.0,
-      "z": 3.3,
-      "roll": 0.0,
-      "pitch": 0.0,
-      "yaw": 0.0
-    },
-    "collision": {
-      "type": "sensor.other.collision",
-      "x": 0.2,
-      "y": 0.0,
-      "z": 3.3,
-      "roll": 0.0,
-      "pitch": 0.0,
-      "yaw": 0.0
-    },
-    "line_invasion": {
-      "type": "sensor.other.lane_invasion",
-      "x": 0.2,
-      "y": 0.0,
-      "z": 3.3,
-      "roll": 0.0,
-      "pitch": 0.0,
-      "yaw": 0.0
-    },
+      "birdseye_segmentation": {
+        "type": "sensor.camera.semantic_segmentation",
+          "attributes": {
+              "image_size_x": 1280,
+            "image_size_y": 1280
+         },
+          "x": 10.0,
+          "y": 0.0,
+          "z": 25,
+          "roll": 0.0,
+          "pitch": -90.0,
+          "yaw": 0.0
+     },
+      "depth_cam": {
+        "type": "sensor.camera.depth",
+       "attributes": {
+         "image_size_x": 1280,
+         "image_size_y": 480,
+         "fov": 120
+       },
+        "x": 0.5,
+        "y": 0.0,
+        "z": 1.5,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      },
+      "imu": {
+        "type": "sensor.other.imu",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      },
+      "gnss": {
+        "type": "sensor.other.gnss",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+       "yaw": 0.0
+     },
+     "collision": {
+        "type": "sensor.other.collision",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      },
+      "line_invasion": {
+        "type": "sensor.other.lane_invasion",
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "roll": 0.0,
+        "pitch": 0.0,
+        "yaw": 0.0
+      }
+  }
 }

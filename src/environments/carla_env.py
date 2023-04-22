@@ -1,13 +1,13 @@
 import json
 import logging
-import time
+import os
+from pathlib import Path
 from typing import Dict, Tuple
 import carla
 import cv2
 import numpy as np
 import random
-
-from src.environments.carla_server import CarlaServer
+from src.environments.reward_functions import reward_functions
 from src.environments.sensors import sensors
 
 MIN_STEPS = 100
@@ -28,12 +28,16 @@ class CarlaEnv:
         self.spawn_points = self.map.get_spawn_points()
         self.blueprint_library = self.world.get_blueprint_library()
 
+        self.traffic_manager = self.client.get_trafficmanager(8000)
+        self.traffic_manager.set_synchronous_mode(True)
+
         self.actors = []
 
         self.sensors = []
 
         self.steps = 0
         self.current_observation = None
+        self.autopilot = False
 
         self.reset()
 
@@ -49,15 +53,22 @@ class CarlaEnv:
         return self.current_observation
 
     def step(self, action: Tuple[float, float]):
-        control = carla.VehicleControl()
-        control.steer = action[0]
-        control.throttle = action[1]
-        self.hero.apply_control(control)
+        if not self.autopilot:
+            control = carla.VehicleControl()
+            control.steer = action[0]
+            control.throttle = action[1]
+            self.hero.apply_control(control)
+        else:
+            if self.hero.is_at_traffic_light():
+                traffic_light = self.hero.get_traffic_light()
+                if traffic_light.get_state() == carla.TrafficLightState.Red:
+                    traffic_light.set_state(carla.TrafficLightState.Green)
+
         self.world.tick() # ToDo: Move to server and allow for multi clients
         self.steps += 1
 
         self.current_observation = self._get_observation()
-        reward = self._compute_reward()
+        reward = self._compute_rewards(self.current_observation, 10, 0)
         done = self._get_is_done()
         info = {"steps": self.steps, "done": done, "reward": reward}
         return self.current_observation, reward, done, info
@@ -66,23 +77,73 @@ class CarlaEnv:
         data = {}
         for sensor in self.sensors:
             data[sensor.name] = sensor.get_data()
+        distance_center, distance_left_lane, distance_right_lane = self._get_distances_to_lane_center()
+        data["distance_center"] = distance_center
+        data["distance_left_lane"] = distance_left_lane
+        data["distance_right_lane"] = distance_right_lane
+        #data["in_intersection"] = self.hero.is_in_intersection()
+        # ToDo: Observe if autopilot does a left turn, right turn or straight
         return data
 
-    def _compute_reward(self) -> float:
-        return 0
+    def _get_distances_to_lane_center(self):
+        hero_location = self.hero.get_location()
+        waypoint = self.map.get_waypoint(hero_location, project_to_road=True, lane_type=carla.LaneType.Driving)
+        waypoint_location = waypoint.transform.location
+        waypoint_direction = waypoint.transform.get_forward_vector()
+        hero_location.z = waypoint_location.z
+        distance_center = _distance_point_to_line(hero_location, waypoint_location, waypoint_direction)
+
+        waypoint_left_lane = waypoint.get_left_lane()
+        distance_left_lane = None
+        if waypoint_left_lane is not None:
+            waypoint_location = waypoint_left_lane.transform.location
+            waypoint_direction = waypoint_left_lane.transform.get_forward_vector()
+            distance_left_lane = _distance_point_to_line(hero_location, waypoint_location, waypoint_direction)
+
+        waypoint_right_lane = waypoint.get_right_lane()
+        distance_right_lane = None
+        if waypoint_right_lane is not None:
+            waypoint_location = waypoint_right_lane.transform.location
+            waypoint_direction = waypoint_right_lane.transform.get_forward_vector()
+            distance_right_lane = _distance_point_to_line(hero_location, waypoint_location, waypoint_direction)
+
+        return distance_center, distance_left_lane, distance_right_lane
+
+    def _compute_rewards(self, observations: Dict, target_velocity: float, direction: int) -> float:
+        velocity = self.hero.get_velocity()
+        velocity = np.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
+        reward_velocity = reward_functions.velocity_reward_function(velocity, target_velocity)
+
+        # Distance to lane center and lane change logic
+        if direction == -1 and observations.get("distance_left_lane", None) is not None:
+            reward_line_center = reward_functions.line_center_reward_function(observations["distance_left_lane"])
+        elif direction == 1 and observations.get("distance_right_lane", None) is not None:
+            reward_line_center = reward_functions.line_center_reward_function(observations["distance_right_lane"])
+        else:
+            reward_line_center = reward_functions.line_center_reward_function(observations["distance_center"])
+
+        reward_collision = -1 if observations["collision"] else 0
+
+        if observations["line_invasion"] and direction == 0:
+            reward_lane_invasion = -1
+        else:
+            reward_lane_invasion = 0
+
+        return {"velocity": reward_velocity, "line_center": reward_line_center,
+                "collision": reward_collision, "lane_invasion": reward_lane_invasion}
 
     def _get_is_done(self):
         return self.steps >= MAX_STEPS
 
     def close(self):
         self._destroy_actors()
+        self.traffic_manager.shutdown()
 
     def _spawn_hero(self):
         hero_bp = self.blueprint_library.filter(SENSOR_CONFIG["blueprint"])[0]
         self.hero = self.world.spawn_actor(hero_bp, random.choice(self.spawn_points))
         self.actors.append(self.hero)
         for sensor_name in SENSOR_CONFIG["sensors"].keys():
-            logging.debug("Spawning sensor: {}".format(sensor_name))
             sensor_config = SENSOR_CONFIG["sensors"][sensor_name]
             sensor = sensors.get_sensor(sensor_config["type"], sensor_name,
                                         sensor_config, self.hero)
@@ -97,33 +158,29 @@ class CarlaEnv:
         for actor in self.actors:
             actor.destroy()
 
+    def set_auto_pilot(self, autopilot: bool):
+        self.autopilot = autopilot
+        self.hero.set_autopilot(autopilot, 8000)
 
-if __name__ == "__main__":
-    server: CarlaServer = None
-    try:
-        server = CarlaServer()
-        time.sleep(20)
-        print("Getting client")
-        client = server.connect_client()
-        print("Connected to client")
+    def log_observations(self, path: str):
+        Path(path).mkdir(parents=True, exist_ok=True)
+        save_dict = {}
+        for key, value in self.current_observation.items():
+            if type(value) is np.ndarray and len(value.shape) == 2:
+                value = np.expand_dims(value, axis=2)
+            if type(value) is np.ndarray and len(value.shape) == 3:
+                cv2.imwrite(os.path.join(path, "{}.png".format(key)), value)
+            else:
+                if type(value) is np.ndarray:
+                    value = value.tolist()
+                save_dict[key] = value
+        with open(os.path.join(path, "observations.json"), "w") as f:
+            json.dump(save_dict, f)
 
-        print("Creating environment")
-        env = CarlaEnv(client)
-        print("Created environment")
 
-        for i in range(1000):
-            obs, reward, done, info = env.step((0.5, 0.0))
-
-            front_camera = obs["front_camera"]
-
-            cv2.imshow("Image", obs["front_camera"])
-            cv2.imshow("Segmentation", obs["front_segmentation"])
-            cv2.waitKey(1)
-            time.sleep(0.1)
-
-        print("Observation: ", obs)
-
-    finally:
-        if server is not None:
-            server.destroy()
-
+def _distance_point_to_line(point: carla.Location, line_anchor: carla.Location, line_direction: carla.Vector3D) -> float:
+    point_to_anchor = line_anchor - point
+    proj_onto_line = point_to_anchor.dot(line_direction)
+    distance_vector = point_to_anchor - proj_onto_line * line_direction
+    distance = float(distance_vector.length())
+    return abs(distance)

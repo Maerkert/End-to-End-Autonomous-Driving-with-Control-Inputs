@@ -92,19 +92,18 @@ class Camera(Sensor):
 	def __init__(self, name: str, attributes: dict, parent_actor: carla.Actor):
 		super().__init__(name, attributes, parent_actor)
 
+	def sensor_callback(self, data: carla.SensorData):
+		self.data_thread_lock.acquire()
+		self.data_buffer = data
+		self.data_thread_lock.release()
+
 	def get_data(self):
-		if self.data_buffer is not None:
-			self.data_thread_lock.acquire()
-			self.data_buffer.convert(ColorConverter.Raw)
-			array = np.frombuffer(self.data_buffer.raw_data, dtype=np.dtype("uint8")).copy()
-			self.data_thread_lock.release()
-
-			array = np.reshape(array, (self.data_buffer.height, self.data_buffer.width, 4))
-			array = array[:, :, :3]
-			array = array[:, :, ::-1]
-
-			return array
-		return None
+		self.data_thread_lock.acquire()
+		array = np.frombuffer(self.data_buffer.raw_data, dtype=np.dtype("uint8")).copy()
+		self.data_thread_lock.release()
+		array = np.reshape(array, (self.data_buffer.height, self.data_buffer.width, 4))
+		array = array[:, :, :3]
+		return array
 
 
 class SegmentationCamera(Sensor):
@@ -139,13 +138,21 @@ class DepthCamera(Sensor):
 	def get_data(self) -> np.array:
 		if self.data_buffer is not None:
 			self.data_thread_lock.acquire()
-			self.data_buffer.convert(ColorConverter.LogarithmicDepth)
-			array = np.frombuffer(self.data_buffer.raw_data, dtype=np.dtype("int")).copy()
+			self.data_buffer.convert(ColorConverter.Raw)
+			array = np.frombuffer(self.data_buffer.raw_data, dtype=np.uint8).copy()
 			self.data_thread_lock.release()
 
-			array = np.reshape(array, (self.data_buffer.height, self.data_buffer.width, 1))
+			# Reshape the array to match the dimensions of the depth buffer
+			array = np.reshape(array, (self.data_buffer.height, self.data_buffer.width, 4))
+			array = array[:, :, :3].astype(np.float32)
 
-			return array
+			normalized = (array[:, :, 2] + array[:, :, 1] * 256 + array[:, :, 0] * 256 * 256) / (256 * 256 * 256 - 1)
+			in_meters = 1000 * normalized
+			in_meters[in_meters > 255.0] = 255.0
+			in_meters *= 255.0
+			in_meters = in_meters.astype(np.uint16)
+
+			return in_meters
 		return None
 
 
@@ -192,7 +199,7 @@ class CollisionSensor(Sensor):
 		super().__init__(name, attributes, parent_actor)
 
 	def get_data(self):
-		# To be implemented
+		# ToDo be implemented
 		return False
 
 
@@ -202,6 +209,6 @@ class LaneInvasionSensor(Sensor):
 		super().__init__(name, attributes, parent_actor)
 
 	def get_data(self):
-		# To be implemented
+		# ToDo be implemented
 		return False
 
